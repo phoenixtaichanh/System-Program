@@ -59,7 +59,7 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 # ---- Test compilation ------------------------------------------------------
 # Tests use the same strict flags but do NOT link against GTK. They include
 # only the public headers in include/.
-TEST_CFLAGS  := -std=c11 -D_POSIX_C_SOURCE=200809L \
+TEST_CFLAGS  := -std=c11 -D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 \
                 -Wall -Wextra -Wpedantic \
                 -Iinclude \
                 -O0 -g

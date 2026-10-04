@@ -12,11 +12,15 @@
  * ============================================================================
  */
 
+#define _XOPEN_SOURCE 700   /* expose S_IF* macros */
+#define _POSIX_C_SOURCE 200809L
+
 #include "path_utils.h"
 #include "format_utils.h"
 #include "logger.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -164,7 +168,7 @@ test_path_normalize(void)
     path_normalize(buf, sizeof(buf));
     CHECK_STR_EQ(buf, "..");
 
-    snprintf(buf, sizeof(buf), "");
+    snprintf(buf, sizeof(buf), "%s", "");
     path_normalize(buf, sizeof(buf));
     CHECK_STR_EQ(buf, ".");
 }

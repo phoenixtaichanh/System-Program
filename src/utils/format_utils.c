@@ -11,6 +11,8 @@
  * ============================================================================
  */
 
+#define _XOPEN_SOURCE 700   /* expose S_IF* and S_ISVTX macros */
+
 #include "format_utils.h"
 
 #include <stdio.h>
@@ -126,7 +128,7 @@ fmt_perm_symbolic(mode_t mode, char *out, size_t out_size)
     /* Set-uid / set-gid / sticky. */
     if (mode & S_ISUID) p[2] = (p[2] == 'x') ? 's' : 'S';
     if (mode & S_ISGID) p[5] = (p[5] == 'x') ? 's' : 'S';
-    if (mode & S_ISVTX) p[8] = (p[8] == 'x') ? 't' : 'T';
+    if (mode & 01000)   p[8] = (p[8] == 'x') ? 't' : 'T';
 
     snprintf(out, out_size, "%c%s", t, p);
     return true;
