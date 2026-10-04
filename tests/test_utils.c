@@ -105,6 +105,7 @@ test_path_basename_dirname(void)
 
     /* path_basename returns a pointer to a static buffer, so capture each
      * result into a local array before the next call overwrites it. */
+    char b1[FS_PATH_MAX], b2[FS_PATH_MAX], b3[FS_PATH_MAX], b4[FS_PATH_MAX], b5[FS_PATH_MAX];
     /* DEBUG: trace each call */
     {
         const char *p;
