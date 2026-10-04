@@ -136,15 +136,19 @@ path_basename(const char *path)
     }
 
     /* Find the last '/' and copy everything after it.
-     * Strip trailing slashes first so "/a/b/" returns "b" (not ""). */
+     * Strip trailing slashes first so "/a/b/" returns "b" (not "").
+     * Then find the LAST '/' within the stripped prefix, so
+     * "/a/b/c" -> "c" (not "a/b/c"). */
     size_t len = strlen(path);
     while (len > 0 && path[len - 1] == '/') len--;
     if (len == 0) {
         buf[0] = '\0';
         return buf;
     }
-    /* memchr (not strrchr) so we only look within the stripped length. */
-    const char *p = memchr(path, '/', len);
+    const char *p = NULL;
+    for (size_t i = len; i > 0; i--) {
+        if (path[i - 1] == '/') { p = path + (i - 1); break; }
+    }
     const char *name = (p != NULL) ? p + 1 : path;
     snprintf(buf, sizeof(buf), "%s", name);
     return buf;
