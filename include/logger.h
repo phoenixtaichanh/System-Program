@@ -10,7 +10,7 @@
 #include <stddef.h>
 
 #define LOG_MAX_ENTRIES 256
-#define LOG_MSG_MAX     512
+#define LOG_MSG_MAX     1024   /* max bytes per log line including timestamp prefix */
 
 /* Initialize the logger. Must be called once at startup. */
 void logger_init(void);
