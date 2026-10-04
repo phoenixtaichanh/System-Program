@@ -14,7 +14,10 @@ gui_main_window_new(void)
     GtkWidget *window;
     GtkWidget *label;
 
-    window = gtk_application_window_new(NULL);
+    /* Use a plain GtkWindow (toplevel) instead of GtkApplicationWindow here.
+     * The application binding is done in main() after the widget exists,
+     * which lets gtk_window_set_application() pass its assertion. */
+    window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window),
                          "File System Explorer & Metadata Analyzer");
     gtk_window_set_default_size(GTK_WINDOW(window), 1100, 700);

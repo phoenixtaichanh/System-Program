@@ -10,8 +10,9 @@
 
 /*
  * Construct the application's main window.
- * The returned widget is a GtkApplicationWindow. The caller is responsible
- * for adding it to a GtkApplication and showing it.
+ * Returns a GtkWidget* (a GtkWindow toplevel). The caller is responsible
+ * for adding it to a GtkApplication via gtk_window_set_application()
+ * and showing it.
  */
 GtkWidget *gui_main_window_new(void);
 

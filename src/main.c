@@ -30,8 +30,8 @@ main(int argc, char *argv[])
     int             status;
 
     app = gtk_application_new(
-        "vn.vku.fs_explorer",      /* Application ID */
-        G_APPLICATION_FLAGS_NONE);
+        "vn.vku.fs_explorer",                /* Application ID */
+        G_APPLICATION_DEFAULT_FLAGS);        /* non-deprecated */
 
     g_signal_connect(app, "activate", G_CALLBACK(on_activate), NULL);
 
