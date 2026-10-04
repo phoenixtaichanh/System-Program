@@ -136,25 +136,33 @@ path_basename(const char *path)
     }
 
     /* Find the last '/' and copy everything after it.
-     * Strip trailing slashes first so "/a/b/" returns "b" (not "").
-     * Then find the LAST '/' within the stripped prefix, so
-     * "/a/b/c" -> "c" (not "a/b/c"). */
+     * Strip trailing slashes (overwrite with '\0' so the source string
+     * also doesn't leak them into snprintf) so "/a/b/" returns "b" (not
+     * "b/"). Then find the LAST '/' within the stripped prefix, so
+     * "/a/b/c" -> "c" (not "a/b/c").
+     * NOTE: we must take a writable copy because the input `path` is
+     * const; the static `buf` doubles as scratch space. */
+    char *scratch = buf;
     size_t len = strlen(path);
-    fprintf(stderr, "DBG path_basename input='%s' strlen=%zu\n", path, len);
-    while (len > 0 && path[len - 1] == '/') len--;
-    fprintf(stderr, "DBG after strip len=%zu\n", len);
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    memcpy(scratch, path, len);
+    scratch[len] = '\0';
+    while (len > 0 && scratch[len - 1] == '/') {
+        scratch[--len] = '\0';
+    }
     if (len == 0) {
         buf[0] = '\0';
         return buf;
     }
     const char *p = NULL;
     for (size_t i = len; i > 0; i--) {
-        if (path[i - 1] == '/') { p = path + (i - 1); break; }
+        if (scratch[i - 1] == '/') { p = scratch + (i - 1); break; }
     }
-    const char *name = (p != NULL) ? p + 1 : path;
-    fprintf(stderr, "DBG name='%s' (p=%p name=%p)\n", name, (void*)p, (void*)name);
-    snprintf(buf, sizeof(buf), "%s", name);
-    fprintf(stderr, "DBG buf='%s' strlen=%zu\n", buf, strlen(buf));
+    const char *name = (p != NULL) ? p + 1 : scratch;
+    size_t name_len = (p != NULL) ? (size_t)(scratch + len - name)
+                                  : len;
+    memcpy(buf, name, name_len);
+    buf[name_len] = '\0';
     return buf;
 }
 
