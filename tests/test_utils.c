@@ -103,11 +103,19 @@ test_path_basename_dirname(void)
 {
     printf("test_path_basename_dirname\n");
 
-    CHECK_STR_EQ(path_basename("/a/b/c"),     "c");
-    CHECK_STR_EQ(path_basename("/a/b/"),      "b");
-    CHECK_STR_EQ(path_basename("a"),          "a");
-    CHECK_STR_EQ(path_basename(""),           "");
-    CHECK_STR_EQ(path_basename("/"),          "");
+    /* path_basename returns a pointer to a static buffer, so capture each
+     * result into a local array before the next call overwrites it. */
+    char b1[FS_PATH_MAX], b2[FS_PATH_MAX], b3[FS_PATH_MAX], b4[FS_PATH_MAX], b5[FS_PATH_MAX];
+    strncpy(b1, path_basename("/a/b/c"), sizeof(b1) - 1); b1[sizeof(b1) - 1] = '\0';
+    CHECK_STR_EQ(b1, "c");
+    strncpy(b2, path_basename("/a/b/"), sizeof(b2) - 1); b2[sizeof(b2) - 1] = '\0';
+    CHECK_STR_EQ(b2, "b");
+    strncpy(b3, path_basename("a"), sizeof(b3) - 1); b3[sizeof(b3) - 1] = '\0';
+    CHECK_STR_EQ(b3, "a");
+    strncpy(b4, path_basename(""), sizeof(b4) - 1); b4[sizeof(b4) - 1] = '\0';
+    CHECK_STR_EQ(b4, "");
+    strncpy(b5, path_basename("/"), sizeof(b5) - 1); b5[sizeof(b5) - 1] = '\0';
+    CHECK_STR_EQ(b5, "");
 
     char d[FS_PATH_MAX];
 
