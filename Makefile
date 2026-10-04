@@ -29,7 +29,10 @@ TARGET     := fs_explorer
 
 # ---- Tests -----------------------------------------------------------------
 TEST_SRC_DIR := tests
-TEST_BIN     := $(BUILD_DIR)/test_utils
+# Each test_<name>.c produces its own binary build/test_<name>.
+TEST_SRCS := $(shell find $(TEST_SRC_DIR) -type f -name '*.c')
+TEST_OBJS := $(patsubst $(TEST_SRC_DIR)/%.c,$(BUILD_DIR)/tests/%.o,$(TEST_SRCS))
+TEST_BINS := $(patsubst $(TEST_SRC_DIR)/%.c,$(BUILD_DIR)/%,$(TEST_SRCS))
 
 # ---- Sources ----------------------------------------------------------------
 # Auto-discover every .c file under src/
@@ -67,14 +70,32 @@ $(BUILD_DIR)/tests/%.o: $(TEST_SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(TEST_CFLAGS) -c $< -o $@
 
-$(TEST_BIN): $(TEST_OBJS) $(filter $(BUILD_DIR)/utils/%,$(OBJS))
+# Each test binary links the corresponding test object plus all object files
+# from src/utils/. (Phase-3 tests also need src/filesystem/, added below.)
+TEST_UTILS_OBJS := $(filter $(BUILD_DIR)/utils/%,$(OBJS))
+TEST_FS_OBJS    := $(filter $(BUILD_DIR)/filesystem/%,$(OBJS))
+
+# Default: tests that only need utils.
+$(BUILD_DIR)/test_utils: $(BUILD_DIR)/tests/test_utils.o $(TEST_UTILS_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) -o $@ $^
 
-test_utils: $(TEST_BIN)
-	./$(TEST_BIN)
+# Phase 3+ tests need the filesystem module.
+$(BUILD_DIR)/test_fs_listing: $(BUILD_DIR)/tests/test_fs_listing.o $(TEST_UTILS_OBJS) $(TEST_FS_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $^
 
-test: test_utils
+# Generic rule for any future test: link with all non-GUI sources.
+$(BUILD_DIR)/test_%: $(BUILD_DIR)/tests/test_%.o $(TEST_UTILS_OBJS) $(TEST_FS_OBJS)
+	@mkdir -p $(dir $@)
+	$(CC) -o $@ $^
+
+test: $(TEST_BINS)
+	@set -e; rc=0; for t in $(TEST_BINS); do \
+	    echo "---- running $$t ----"; \
+	    ./$$t || rc=$$?; \
+	done; \
+	exit $$rc
 
 run: $(BIN)
 	./$(BIN)
@@ -96,8 +117,7 @@ help:
 	@echo "  make run       - build and launch the GUI"
 	@echo "  make debug     - clean rebuild with -O0 -g3 -DDEBUG"
 	@echo "  make valgrind  - run engine under valgrind (requires --cli mode in code)"
-	@echo "  make test      - build & run unit tests for the utils layer"
-	@echo "  make test_utils- same as 'make test'"
+	@echo "  make test      - build & run all unit tests (one binary per tests/*.c)"
 	@echo "  make clean     - remove build artifacts"
 
 # ---- Auto-generated header dependencies -------------------------------------
