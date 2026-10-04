@@ -137,7 +137,6 @@ path_basename(const char *path)
 
     /* Find the last '/' and copy everything after it.
      * Strip trailing slashes first so "/a/b/" returns "b" (not ""). */
-    static char buf[FS_PATH_MAX];
     size_t len = strlen(path);
     while (len > 0 && path[len - 1] == '/') len--;
     if (len == 0) {
