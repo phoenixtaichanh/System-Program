@@ -106,34 +106,9 @@ test_path_basename_dirname(void)
     /* path_basename returns a pointer to a static buffer, so capture each
      * result into a local array before the next call overwrites it. */
     char b1[FS_PATH_MAX], b2[FS_PATH_MAX], b3[FS_PATH_MAX], b4[FS_PATH_MAX], b5[FS_PATH_MAX];
-    /* DEBUG: trace each call */
-    {
-        const char *p;
-        char tmp[FS_PATH_MAX];
-
-        p = path_basename("/a/b/c");
-        printf("  DBG /a/b/c -> '%s' (len=%zu)\n", p, strlen(p));
-        strncpy(b1, p, sizeof(b1) - 1); b1[sizeof(b1) - 1] = '\0';
-
-        p = path_basename("/a/b/");
-        printf("  DBG /a/b/  -> '%s' (len=%zu)\n", p, strlen(p));
-        strncpy(tmp, p, sizeof(tmp) - 1); tmp[sizeof(tmp) - 1] = '\0';
-        strncpy(b2, tmp, sizeof(b2) - 1); b2[sizeof(b2) - 1] = '\0';
-        printf("  DBG b2     -> '%s' (len=%zu)\n", b2, strlen(b2));
-
-        p = path_basename("a");
-        printf("  DBG a      -> '%s' (len=%zu)\n", p, strlen(p));
-        strncpy(b3, p, sizeof(b3) - 1); b3[sizeof(b3) - 1] = '\0';
-
-        p = path_basename("");
-        printf("  DBG ''     -> '%s' (len=%zu)\n", p, strlen(p));
-        strncpy(b4, p, sizeof(b4) - 1); b4[sizeof(b4) - 1] = '\0';
-
-        p = path_basename("/");
-        printf("  DBG /      -> '%s' (len=%zu)\n", p, strlen(p));
-        strncpy(b5, p, sizeof(b5) - 1); b5[sizeof(b5) - 1] = '\0';
-    }
+    strncpy(b1, path_basename("/a/b/c"), sizeof(b1) - 1); b1[sizeof(b1) - 1] = '\0';
     CHECK_STR_EQ(b1, "c");
+    strncpy(b2, path_basename("/a/b/"), sizeof(b2) - 1); b2[sizeof(b2) - 1] = '\0';
     CHECK_STR_EQ(b2, "b");
     strncpy(b3, path_basename("a"), sizeof(b3) - 1); b3[sizeof(b3) - 1] = '\0';
     CHECK_STR_EQ(b3, "a");
