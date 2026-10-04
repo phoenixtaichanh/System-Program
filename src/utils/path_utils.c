@@ -100,6 +100,15 @@ path_join(const char *base, const char *leaf, char *out, size_t out_size)
     while (base_len > 1 && base[base_len - 1] == '/') {
         base_len--;
     }
+
+    /* Empty leaf: return stripped base (no extra separator). */
+    if (leaf[0] == '\0') {
+        if (base_len + 1 > out_size) return false;
+        memcpy(out, base, base_len);
+        out[base_len] = '\0';
+        return true;
+    }
+
     int need_sep = (base_len > 0 && base[base_len - 1] != '/') ? 1 : 0;
 
     int n = snprintf(out, out_size, "%.*s%s%s",
@@ -127,10 +136,16 @@ path_basename(const char *path)
     }
 
     /* Find the last '/' and copy everything after it.
-     * Strip trailing slashes first so "/a/b/" returns "b", not "". */
+     * Strip trailing slashes first so "/a/b/" returns "b" (not ""). */
+    static char buf[FS_PATH_MAX];
     size_t len = strlen(path);
     while (len > 0 && path[len - 1] == '/') len--;
-    const char *p = (len == 0) ? NULL : strrchr(path, '/');
+    if (len == 0) {
+        buf[0] = '\0';
+        return buf;
+    }
+    /* memchr (not strrchr) so we only look within the stripped length. */
+    const char *p = memchr(path, '/', len);
     const char *name = (p != NULL) ? p + 1 : path;
     snprintf(buf, sizeof(buf), "%s", name);
     return buf;

@@ -92,7 +92,7 @@ test_path_join(void)
     CHECK_STR_EQ(buf, "/abs");
 
     path_join("/a", "", buf, sizeof(buf));
-    CHECK_STR_EQ(buf, "/a");                /* empty leaf is OK */
+    CHECK_STR_EQ(buf, "/a");                /* empty leaf: trailing sep not added */
 }
 
 /* ------------------------------------------------------------------ *
