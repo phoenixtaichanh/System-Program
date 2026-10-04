@@ -140,7 +140,9 @@ path_basename(const char *path)
      * Then find the LAST '/' within the stripped prefix, so
      * "/a/b/c" -> "c" (not "a/b/c"). */
     size_t len = strlen(path);
+    fprintf(stderr, "DBG path_basename input='%s' strlen=%zu\n", path, len);
     while (len > 0 && path[len - 1] == '/') len--;
+    fprintf(stderr, "DBG after strip len=%zu\n", len);
     if (len == 0) {
         buf[0] = '\0';
         return buf;
@@ -150,7 +152,9 @@ path_basename(const char *path)
         if (path[i - 1] == '/') { p = path + (i - 1); break; }
     }
     const char *name = (p != NULL) ? p + 1 : path;
+    fprintf(stderr, "DBG name='%s' (p=%p name=%p)\n", name, (void*)p, (void*)name);
     snprintf(buf, sizeof(buf), "%s", name);
+    fprintf(stderr, "DBG buf='%s' strlen=%zu\n", buf, strlen(buf));
     return buf;
 }
 
