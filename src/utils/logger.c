@@ -42,8 +42,10 @@ logger_append(const char *fmt, ...)
 {
     if (fmt == NULL) return;
 
-    /* Build the formatted message. */
-    char body[LOG_MSG_MAX - 32];   /* leave room for "[timestamp] " prefix */
+    /* Build the formatted message. Truncate body if needed so the final
+     * "[timestamp] <body>" always fits within LOG_MSG_MAX. The 24-byte
+     * reserve covers "[YYYY-MM-DD HH:MM:SS] " (max ~22 chars) + NUL. */
+    char body[LOG_MSG_MAX - 24];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(body, sizeof(body), fmt, ap);
