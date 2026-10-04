@@ -290,7 +290,7 @@ test_logger(void)
     /* Most recent is on the last line. */
     char *last_nl = strrchr(buf, '\n');
     CHECK(last_nl != NULL);
-    CHECK(strstr(last_nl, "third line") != NULL);
+    CHECK(last_nl > buf && strstr(last_nl - strlen("third line"), "third line") != NULL);
 
     /* Cap at max=2 -> only the 2 most recent. */
     n = logger_recent(buf, sizeof(buf), 2);

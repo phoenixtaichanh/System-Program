@@ -95,9 +95,13 @@ path_join(const char *base, const char *leaf, char *out, size_t out_size)
         return n > 0 && (size_t)n < out_size;
     }
 
-    /* Determine if we need to insert a separator. */
+    /* Determine if we need to insert a separator.
+     * Skip any trailing '/' on base so "/a/" + "b" becomes "/a/b". */
     size_t base_len = strlen(base);
-    int need_sep = (base[base_len - 1] != '/') ? 1 : 0;
+    while (base_len > 1 && base[base_len - 1] == '/') {
+        base_len--;
+    }
+    int need_sep = (base_len > 0 && base[base_len - 1] != '/') ? 1 : 0;
 
     int n = snprintf(out, out_size, "%s%s%s",
                      base,
@@ -123,8 +127,11 @@ path_basename(const char *path)
         return buf;
     }
 
-    /* Find the last '/' and copy everything after it. */
-    const char *p = strrchr(path, '/');
+    /* Find the last '/' and copy everything after it.
+     * Strip trailing slashes first so "/a/b/" returns "b", not "". */
+    size_t len = strlen(path);
+    while (len > 0 && path[len - 1] == '/') len--;
+    const char *p = (len == 0) ? NULL : memchr(path, '/', len);
     const char *name = (p != NULL) ? p + 1 : path;
 
     snprintf(buf, sizeof(buf), "%s", name);
