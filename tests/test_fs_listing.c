@@ -14,6 +14,7 @@
 
 #define _XOPEN_SOURCE 700
 
+#include "test_util.h"
 #include "fs_listing.h"
 #include "fs_navigation.h"
 #include "fs_types.h"
@@ -54,31 +55,34 @@ static int g_fail = 0;
 /* ------------------------------------------------------------------ *
  * Helpers for setting up an isolated test directory under /tmp
  * ------------------------------------------------------------------ */
-#define SANDBOX "/tmp/fse_listing_test"
+#define SANDBOX t_sandbox_path()
 
 static void
 rm_sandbox(void)
 {
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "rm -rf %s", SANDBOX);
-    int rc = system(cmd);
-    (void)rc;
+    t_rmtree(SANDBOX);
 }
 
 static void
 make_sandbox(void)
 {
     rm_sandbox();
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd),
-             "mkdir -p %s/sub1 %s/sub2 && "
-             "touch %s/fileA.txt %s/fileB.txt && "
-             "echo hi > %s/sub1/inner.txt",
-             SANDBOX, SANDBOX,
-             SANDBOX, SANDBOX,
-             SANDBOX);
-    int rc = system(cmd);
-    (void)rc;
+
+    char path[512];
+
+    t_mkdir(SANDBOX);
+
+    snprintf(path, sizeof(path), "%s/sub1", SANDBOX);
+    t_mkdir(path);
+    snprintf(path, sizeof(path), "%s/sub2", SANDBOX);
+    t_mkdir(path);
+
+    snprintf(path, sizeof(path), "%s/fileA.txt", SANDBOX);
+    t_write_file(path, "A\n");
+    snprintf(path, sizeof(path), "%s/fileB.txt", SANDBOX);
+    t_write_file(path, "B\n");
+    snprintf(path, sizeof(path), "%s/sub1/inner.txt", SANDBOX);
+    t_write_file(path, "hi\n");
 }
 
 /* ------------------------------------------------------------------ *
@@ -157,14 +161,20 @@ static void
 test_list_dir_no_read_perm(void)
 {
     printf("test_list_dir_no_read_perm\n");
-    if (geteuid() == 0) {
+#ifdef _WIN32
+    /* Windows has no POSIX permission bits, so a directory cannot be made
+     * unreadable that way. */
+    printf("  (skipped: not supported on Windows)\n");
+    return;
+#else
+    if (t_geteuid() == 0) {
         printf("  (skipped: running as root)\n");
         return;
     }
 
     char path[256];
     snprintf(path, sizeof(path), "%s/locked", SANDBOX);
-    mkdir(path, 0000);
+    t_mkdir(path);
     chmod(path, 0000);
 
     DirEntry entries[4];
@@ -175,6 +185,7 @@ test_list_dir_no_read_perm(void)
 
     /* Cleanup: restore perms so rm works. */
     chmod(path, 0700);
+#endif
 }
 
 /* ------------------------------------------------------------------ *
@@ -202,10 +213,15 @@ static void
 test_list_dir_with_symlink(void)
 {
     printf("test_list_dir_with_symlink\n");
+    if (!t_can_symlink()) {
+        printf("  (skipped: this user may not create symbolic links)\n");
+        return;
+    }
+
     char linkpath[256];
     snprintf(linkpath, sizeof(linkpath), "%s/alink", SANDBOX);
-    unlink(linkpath);
-    int rc = symlink("fileA.txt", linkpath);
+    t_unlink(linkpath);
+    int rc = t_symlink("fileA.txt", linkpath);
     CHECK(rc == 0);
 
     DirEntry entries[16];
@@ -226,7 +242,7 @@ test_list_dir_with_symlink(void)
     }
     CHECK(found == 1);
 
-    unlink(linkpath);
+    t_unlink(linkpath);
 }
 
 /* ------------------------------------------------------------------ *
@@ -236,10 +252,15 @@ static void
 test_list_dir_broken_symlink(void)
 {
     printf("test_list_dir_broken_symlink\n");
+    if (!t_can_symlink()) {
+        printf("  (skipped: this user may not create symbolic links)\n");
+        return;
+    }
+
     char linkpath[256];
     snprintf(linkpath, sizeof(linkpath), "%s/broken", SANDBOX);
-    unlink(linkpath);
-    int rc = symlink("/no/such/target/exists/here", linkpath);
+    t_unlink(linkpath);
+    int rc = t_symlink("/no/such/target/exists/here", linkpath);
     CHECK(rc == 0);
 
     DirEntry entries[16];
@@ -258,7 +279,7 @@ test_list_dir_broken_symlink(void)
     }
     CHECK(found == 1);
 
-    unlink(linkpath);
+    t_unlink(linkpath);
 }
 
 /* ------------------------------------------------------------------ *
@@ -272,7 +293,11 @@ test_cwd(void)
     char *before = fs_get_cwd();
     CHECK(before != NULL);
     CHECK(strlen(before) > 0);
-    CHECK(before[0] == '/');  /* absolute */
+#ifdef _WIN32
+    CHECK(before[1] == ':');   /* "C:\..." */
+#else
+    CHECK(before[0] == '/');   /* absolute */
+#endif
 
     /* chdir to sandbox then back */
     FSStatus s = fs_set_cwd(SANDBOX);
@@ -300,7 +325,14 @@ test_cwd_errors(void)
     FSStatus s = fs_set_cwd("/no/such/dir/anywhere/12345");
     CHECK(s == FS_ERR_NOT_FOUND);
 
+#ifdef _WIN32
+    /* A file (not a directory) must be rejected. */
+    char file[512];
+    snprintf(file, sizeof(file), "%s/fileA.txt", SANDBOX);
+    s = fs_set_cwd(file);
+#else
     s = fs_set_cwd("/etc/hostname");   /* not a directory */
+#endif
     CHECK(s == FS_ERR_NOT_DIR);
 
     s = fs_set_cwd(NULL);
@@ -317,6 +349,7 @@ int
 main(void)
 {
     printf("==== fs_listing + fs_navigation test ====\n");
+    t_sandbox_init("listing");
 
     make_sandbox();
     atexit(rm_sandbox);

@@ -12,4 +12,11 @@
 
 GtkWidget *gui_metadata_panel_new(AppState *state);
 
+/*
+ * Test helper: return the text of the row at `row` (0 = Name ... 11 = Your
+ * access), or NULL when the row does not exist. The returned string is owned
+ * by the caller and must be freed with g_free().
+ */
+char *gui_metadata_panel_get_row_text(GtkWidget *panel, int row);
+
 #endif /* GUI_METADATA_PANEL_H */

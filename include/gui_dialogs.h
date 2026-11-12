@@ -15,4 +15,8 @@ void gui_show_error(GtkWindow *parent, const char *title,
 
 gboolean gui_confirm(GtkWindow *parent, const char *title, const char *body);
 
+/* Show a read-only informational dialog (used for "about" and for the
+ * results of long-running analyses). */
+void gui_show_info(GtkWindow *parent, const char *title, const char *body);
+
 #endif /* GUI_DIALOGS_H */

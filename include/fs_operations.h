@@ -23,4 +23,8 @@ FSStatus fs_rename(const char *old_path, const char *new_path);
  * Auto-detects the type using lstat. */
 FSStatus fs_remove(const char *path);
 
+/* Copy a regular file (or recreate a symbolic link) from `src_path` to
+ * `dst_path`. An existing destination file is overwritten. */
+FSStatus fs_copy(const char *src_path, const char *dst_path);
+
 #endif /* FS_OPERATIONS_H */

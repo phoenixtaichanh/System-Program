@@ -17,18 +17,18 @@
 
 #include "path_utils.h"
 
-#include <pwd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <libgen.h>     /* POSIX basename()/dirname() - may modify input */
 #include <sys/stat.h>
 
 /* ------------------------------------------------------------------ *
  * path_is_absolute
- *   Returns true if `path` starts with '/'. Empty path is NOT absolute.
+ *   Returns true if `path` is rooted. On POSIX that means it starts
+ *   with '/'; on Windows a drive letter ("C:\..." or "C:/...") counts as
+ *   absolute as well. An empty path is NOT absolute.
  * ------------------------------------------------------------------ */
 bool
 path_is_absolute(const char *path)
@@ -36,7 +36,25 @@ path_is_absolute(const char *path)
     if (path == NULL || path[0] == '\0') {
         return false;
     }
-    return path[0] == '/';
+
+    if (path[0] == '/' || path[0] == '\\') {
+        return true;
+    }
+
+#ifdef _WIN32
+    /* "C:\dir" and "C:/dir" are absolute. */
+    if (path[0] != '\0' && path[1] == ':' &&
+        ((path[0] >= 'A' && path[0] <= 'Z') ||
+         (path[0] >= 'a' && path[0] <= 'z'))) {
+        return true;
+    }
+    /* "\\server\share" is absolute (UNC). */
+    if (path[0] == '\\' && path[1] == '\\') {
+        return true;
+    }
+#endif
+
+    return false;
 }
 
 /* ------------------------------------------------------------------ *
@@ -47,21 +65,11 @@ path_is_absolute(const char *path)
 const char *
 path_home_dir(void)
 {
-    const char *env = getenv("HOME");
-    if (env != NULL && env[0] != '\0') {
-        return env;
-    }
+    static char buf[FS_PATH_MAX];
 
-    struct passwd *pw = getpwuid(getuid());
-    if (pw != NULL && pw->pw_dir != NULL && pw->pw_dir[0] != '\0') {
-        /* Cache the value inside the passwd struct; it persists for the
-         * lifetime of the process in the glibc implementation, but we copy
-         * into a static buffer to be safe against getpwuid() reuse. */
-        static char buf[FS_PATH_MAX];
-        snprintf(buf, sizeof(buf), "%s", pw->pw_dir);
+    if (fs_plat_home_dir(buf, sizeof(buf)) == 0 && buf[0] != '\0') {
         return buf;
     }
-
     return "/";
 }
 
@@ -262,7 +270,13 @@ path_normalize(char *path, size_t path_size)
             if (sp > 0 && strcmp(stack[sp - 1], "..") != 0) {
                 sp--;                /* pop last component */
             } else if (!is_absolute) {
-                stack[sp++] = tok;   /* keep leading ".." for relative paths */
+                /* Keep leading ".." for relative paths, but never write
+                 * past the end of the stack. */
+                if (sp >= (int)(sizeof(stack) / sizeof(stack[0]))) {
+                    free(scratch);
+                    return false;
+                }
+                stack[sp++] = tok;
             }
             /* if absolute and stack is empty, just drop the ".." */
         } else {
@@ -318,10 +332,13 @@ path_normalize(char *path, size_t path_size)
 
 /* ------------------------------------------------------------------ *
  * path_resolve
- *   Resolves `path` against `base` (if path is relative) and then calls
- *   realpath() to canonicalize (following all symlinks). The canonical
+ *   Resolves `path` against `base` (if path is relative) and then
+ *   canonicalizes the result (following all symlinks). The canonical
  *   absolute path is written into `out`. If path is absolute, base is
  *   ignored.
+ *
+ *   The canonicalization is delegated to fs_platform.h so that Windows
+ *   (which has no realpath()) behaves the same way.
  * ------------------------------------------------------------------ */
 bool
 path_resolve(const char *base, const char *path,
@@ -342,9 +359,9 @@ path_resolve(const char *base, const char *path,
         use = combined;
     }
 
-    char *resolved = realpath(use, NULL);
-    if (resolved == NULL) {
-        /* realpath failed (e.g. EACCES, ENOENT). The caller can check
+    char resolved[FS_PATH_MAX];
+    if (!fs_plat_realpath(use, resolved, sizeof(resolved))) {
+        /* Resolution failed (e.g. EACCES, ENOENT). The caller can check
          * errno. We still write a best-effort absolute path. */
         snprintf(out, out_size, "%s", use);
         return false;
@@ -352,6 +369,5 @@ path_resolve(const char *base, const char *path,
 
     bool ok = snprintf(out, out_size, "%s", resolved) > 0
               && strlen(resolved) < out_size;
-    free(resolved);
     return ok;
 }

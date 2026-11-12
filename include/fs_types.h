@@ -8,8 +8,9 @@
 #ifndef FS_TYPES_H
 #define FS_TYPES_H
 
+#include "fs_platform.h"
+
 #include <sys/types.h>  /* off_t, ino_t, nlink_t, uid_t, gid_t, mode_t, time_t */
-#include <sys/stat.h>   /* blkcnt_t, blksize_t (POSIX) */
 
 /* Hard limits chosen to be safely large for typical Linux paths. */
 #define FS_PATH_MAX  4096
@@ -53,17 +54,17 @@ typedef struct {
     FSFileType  type;
 
     off_t       size;
-    ino_t       inode;
-    nlink_t     nlinks;
-    blkcnt_t    blocks;
-    blkcnt_t    block_size;
+    FsIno       inode;
+    FsNlink     nlinks;
+    FsBlkcnt    blocks;
+    FsBlkcnt    block_size;
 
-    uid_t       uid;
-    gid_t       gid;
+    FsUid       uid;
+    FsGid       gid;
     char        owner[64];
     char        group[64];
 
-    mode_t      mode;
+    unsigned int mode;
     char        perm_symbolic[12];   /* e.g. "-rwxr-xr-x" */
     char        perm_octal[5];       /* e.g. "0754" */
 
@@ -73,7 +74,12 @@ typedef struct {
 
     /* Symlink-specific (only valid if type == FS_TYPE_SYMLINK). */
     char        link_target[FS_PATH_MAX];
-    int         link_target_exists;  /* 1 = yes, -1 = no, 0 = unknown */
+
+    /* Whether the link target resolves:
+     *   1  the target exists
+     *   0  unknown (the link was not resolved)
+     *  -1  the target does not exist (broken link) */
+    int         link_target_exists;
 
     /* Per-row fetch status so a failed stat does not abort the whole listing. */
     FSStatus    status;

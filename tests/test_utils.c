@@ -17,6 +17,7 @@
 
 #include "path_utils.h"
 #include "format_utils.h"
+#include "fs_platform.h"
 #include "logger.h"
 
 #include <assert.h>
@@ -234,13 +235,13 @@ test_fmt_perm(void)
     printf("test_fmt_perm\n");
     char buf[16];
 
-    fmt_perm_symbolic(S_IFREG | 0754, buf, sizeof(buf));
+    fmt_perm_symbolic(FS_S_IFREG | 0754, buf, sizeof(buf));
     CHECK_STR_EQ(buf, "-rwxr-xr--");
 
-    fmt_perm_symbolic(S_IFDIR | 0750, buf, sizeof(buf));
+    fmt_perm_symbolic(FS_S_IFDIR | 0750, buf, sizeof(buf));
     CHECK_STR_EQ(buf, "drwxr-x---");
 
-    fmt_perm_symbolic(S_IFLNK | 0777, buf, sizeof(buf));
+    fmt_perm_symbolic(FS_S_IFLNK | 0777, buf, sizeof(buf));
     CHECK_STR_EQ(buf, "lrwxrwxrwx");
 
     fmt_perm_octal(0754, buf, sizeof(buf));

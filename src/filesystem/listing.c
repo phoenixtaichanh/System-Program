@@ -13,139 +13,40 @@
  *   - Entries that fail to lstat() are still appended (with status set), so
  *     the GUI can show "Permission denied" rows instead of dropping data.
  *   - Results are sorted by name (case-sensitive, ascending).
+ *   - All platform-specific syscalls are routed through fs_platform.h.
  * ============================================================================
  */
-
-#define _XOPEN_SOURCE 700   /* expose S_IF* / S_IS* macros */
 
 #include "fs_listing.h"
 #include "path_utils.h"
 #include "format_utils.h"
+#include "fs_stat_util.h"
 
 #include <dirent.h>
 #include <errno.h>
-#include <pwd.h>
-#include <grp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 
 /* ------------------------------------------------------------------ *
- * Local helper: fill a FileMetadata from a populated struct stat.
- * Returns FS_OK, or FS_ERR_NOT_FOUND / FS_ERR_PERMISSION if the stat
- * call itself failed (caller can decide what to do).
+ * Copy a name into a fixed-size field, truncating safely.
+ *
+ * snprintf() already truncates, but GCC warns about it when the source
+ * length is not provably bounded. This helper takes the source as a
+ * plain "const char *" so the warning disappears.
  * ------------------------------------------------------------------ */
-static FSStatus
-fill_metadata_from_lstat(const char *full_path,
-                         const struct stat *st,
-                         FileMetadata *out)
+static void
+copy_name(char *dst, size_t dst_size, const char *src)
 {
-    out->status = FS_OK;
-    out->errno_code = 0;
-
-    /* type -------------------------------------------------------------- */
-    if      (S_ISREG(st->st_mode))  out->type = FS_TYPE_REGULAR;
-    else if (S_ISDIR(st->st_mode))  out->type = FS_TYPE_DIRECTORY;
-    else if (S_ISLNK(st->st_mode))  out->type = FS_TYPE_SYMLINK;
-    else if (S_ISCHR(st->st_mode))  out->type = FS_TYPE_CHAR_DEV;
-    else if (S_ISBLK(st->st_mode))  out->type = FS_TYPE_BLOCK_DEV;
-    else if (S_ISFIFO(st->st_mode)) out->type = FS_TYPE_FIFO;
-    else if (S_ISSOCK(st->st_mode)) out->type = FS_TYPE_SOCKET;
-    else                            out->type = FS_TYPE_UNKNOWN;
-
-    /* sizes / ids ------------------------------------------------------- */
-    out->size       = st->st_size;
-    out->inode      = st->st_ino;
-    out->nlinks     = st->st_nlinks;
-    out->blocks     = st->st_blocks;
-    out->block_size = st->st_blksize;
-
-    out->uid = st->st_uid;
-    out->gid = st->st_gid;
-
-    /* owner / group names (NULL-safe) */
-    struct passwd *pw = getpwuid(st->st_uid);
-    if (pw && pw->pw_name) {
-        snprintf(out->owner, sizeof(out->owner), "%s", pw->pw_name);
-    } else {
-        snprintf(out->owner, sizeof(out->owner), "%lu",
-                 (unsigned long)st->st_uid);
+    if (dst == NULL || dst_size == 0) return;
+    if (src == NULL) {
+        dst[0] = '\0';
+        return;
     }
-    struct group *gr = getgrgid(st->st_gid);
-    if (gr && gr->gr_name) {
-        snprintf(out->group, sizeof(out->group), "%s", gr->gr_name);
-    } else {
-        snprintf(out->group, sizeof(out->group), "%lu",
-                 (unsigned long)st->st_gid);
-    }
-
-    /* mode + permissions ----------------------------------------------- */
-    out->mode = st->st_mode;
-    fmt_perm_symbolic(st->st_mode, out->perm_symbolic, sizeof(out->perm_symbolic));
-    fmt_perm_octal  (st->st_mode, out->perm_octal,   sizeof(out->perm_octal));
-
-    /* timestamps */
-    out->atime = st->st_atime;
-    out->mtime = st->st_mtime;
-    out->ctime = st->st_ctime;
-
-    /* symlink target (only if symlink) */
-    if (S_ISLNK(st->st_mode)) {
-        ssize_t n = readlink(full_path, out->link_target,
-                             sizeof(out->link_target) - 1);
-        if (n < 0) {
-            out->link_target[0] = '\0';
-            out->link_target_exists = 0;
-        } else {
-            out->link_target[n] = '\0';
-            struct stat target_st;
-            if (stat(full_path, &target_st) == 0) out->link_target_exists = 1;
-            else if (errno == ENOENT)              out->link_target_exists = -1;
-            else                                   out->link_target_exists = 0;
-        }
-    } else {
-        out->link_target[0] = '\0';
-        out->link_target_exists = 0;
-    }
-
-    /* store the full path in `path` if not already set */
-    if (out->path[0] == '\0') {
-        snprintf(out->path, sizeof(out->path), "%s", full_path);
-    }
-
-    return FS_OK;
-}
-
-/* ------------------------------------------------------------------ *
- * Local helper: map a dirent's name to a DirEntry using lstat.
- * Returns FS_OK if stat succeeded, otherwise an error status
- * (still leaves a placeholder entry in `out`).
- * ------------------------------------------------------------------ */
-static FSStatus
-stat_one_entry(const char *parent, const char *name,
-               DirEntry *out)
-{
-    char full[FS_PATH_MAX];
-    if (!path_join(parent, name, full, sizeof(full))) {
-        out->meta.status = FS_ERR_INVALID_PATH;
-        out->meta.errno_code = ENAMETOOLONG;
-        return FS_ERR_INVALID_PATH;
-    }
-
-    /* copy name + path first so even on failure we render something */
-    snprintf(out->meta.name, sizeof(out->meta.name), "%s", name);
-    snprintf(out->meta.path, sizeof(out->meta.path), "%s", full);
-
-    struct stat st;
-    if (lstat(full, &st) != 0) {
-        int e = errno;
-        out->meta.status = (e == EACCES || e == EPERM) ? FS_ERR_PERMISSION
-                                                        : FS_ERR_IO;
-        out->meta.errno_code = e;
-        return out->meta.status;
-    }
-    return fill_metadata_from_lstat(full, &st, &out->meta);
+    size_t n = strlen(src);
+    if (n >= dst_size) n = dst_size - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
 }
 
 /* ------------------------------------------------------------------ *
@@ -160,7 +61,55 @@ cmp_dirent_name(const void *a, const void *b)
 }
 
 /* ------------------------------------------------------------------ *
+ * Growable buffer used while the whole directory is being collected.
+ * ------------------------------------------------------------------ */
+typedef struct {
+    DirEntry *data;
+    size_t    count;
+    size_t    capacity;
+} EntryVec;
+
+static int
+entry_vec_init(EntryVec *v)
+{
+    v->data     = NULL;
+    v->count    = 0;
+    v->capacity = 0;
+    return 0;
+}
+
+static void
+entry_vec_free(EntryVec *v)
+{
+    free(v->data);
+    v->data     = NULL;
+    v->count    = 0;
+    v->capacity = 0;
+}
+
+static DirEntry *
+entry_vec_push(EntryVec *v)
+{
+    if (v->count == v->capacity) {
+        size_t new_cap = (v->capacity == 0) ? 64 : v->capacity * 2;
+        DirEntry *nb = (DirEntry *)realloc(v->data,
+                                           new_cap * sizeof(DirEntry));
+        if (nb == NULL) return NULL;
+        v->data     = nb;
+        v->capacity = new_cap;
+    }
+    DirEntry *slot = &v->data[v->count++];
+    memset(slot, 0, sizeof(*slot));
+    return slot;
+}
+
+/* ------------------------------------------------------------------ *
  * fs_list_dir
+ *
+ * The whole directory is read and sorted first; only then is the
+ * requested prefix handed back to the caller. Sorting a truncated slice
+ * would produce a non-deterministic order, because readdir() returns
+ * entries in whatever order the file system stores them.
  * ------------------------------------------------------------------ */
 FSStatus
 fs_list_dir(const char *path, DirEntry *out_entries, int *count_io)
@@ -177,46 +126,91 @@ fs_list_dir(const char *path, DirEntry *out_entries, int *count_io)
     DIR *d = opendir(path);
     if (d == NULL) {
         int e = errno;
-        if (e == ENOENT || e == ENOTDIR) return FS_ERR_NOT_FOUND;
-        if (e == EACCES || e == EPERM)  return FS_ERR_PERMISSION;
-        return FS_ERR_IO;
+        return fs_stat_util_status_from_errno(e);
     }
 
+    EntryVec vec;
+    entry_vec_init(&vec);
+
     struct dirent *de;
-    int written = 0;
     int first_err = FS_OK;
+
     while ((de = readdir(d)) != NULL) {
         if (strcmp(de->d_name, ".") == 0 ||
             strcmp(de->d_name, "..") == 0) {
             continue;
         }
-        if (written >= capacity) {
-            /* ran out of room; stop. */
+
+        char full[FS_PATH_MAX];
+        if (!path_join(path, de->d_name, full, sizeof(full))) {
+            /* Path too long: still record the entry so the user sees it. */
+            DirEntry *dst = entry_vec_push(&vec);
+            if (dst == NULL) {
+                first_err = FS_ERR_NOMEM;
+                break;
+            }
+            copy_name(dst->meta.name, sizeof(dst->meta.name), de->d_name);
+            snprintf(dst->meta.path, sizeof(dst->meta.path), "%s/%s",
+                     path, de->d_name);
+            dst->meta.status     = FS_ERR_INVALID_PATH;
+            dst->meta.errno_code = ENAMETOOLONG;
+            dst->meta.type       = FS_TYPE_UNKNOWN;
+            continue;
+        }
+
+        DirEntry *dst = entry_vec_push(&vec);
+        if (dst == NULL) {
+            first_err = FS_ERR_NOMEM;
             break;
         }
-        DirEntry *dst = &out_entries[written];
-        memset(dst, 0, sizeof(*dst));
-        FSStatus s = stat_one_entry(path, de->d_name, dst);
-        if (s != FS_OK && first_err == FS_OK) first_err = s;
-        written++;
+
+        FSStatus s = fs_stat_util_fill_path(full, de->d_name, 1, &dst->meta);
+        if (s != FS_OK && first_err == FS_OK) {
+            first_err = s;
+        }
     }
+
+    if (errno != 0 && vec.count == 0) {
+        /* readdir() itself failed (as opposed to simply reaching the end
+         * of the directory, which also leaves errno untouched). */
+        int e = errno;
+        closedir(d);
+        entry_vec_free(&vec);
+        *count_io = 0;
+        return fs_stat_util_status_from_errno(e);
+    }
+
     closedir(d);
 
-    *count_io = written;
-
-    /* sort the populated slice */
-    if (written > 1) {
-        qsort(out_entries, (size_t)written, sizeof(DirEntry), cmp_dirent_name);
+    if (first_err == FS_ERR_NOMEM) {
+        entry_vec_free(&vec);
+        *count_io = 0;
+        return FS_ERR_NOMEM;
     }
 
-    /* If we wrote entries but the dir itself was openable (so we got
-     * this far), we treat ENOENT/ENOTDIR as the dominant error even if
-     * some individual entries also failed; otherwise report the first
-     * per-entry error. */
-    if (written == 0) {
-        /* Nothing was enumerable - this happens if directory is empty OR
-         * readdir returned NULL after first call due to I/O error. */
-        return first_err == FS_OK ? FS_OK : first_err;
+    /* Sort the complete set of entries by name. */
+    if (vec.count > 1) {
+        qsort(vec.data, vec.count, sizeof(DirEntry), cmp_dirent_name);
+    }
+
+    /* Hand back the first `capacity` entries. */
+    size_t to_copy = vec.count;
+    if (to_copy > (size_t)capacity) {
+        to_copy = (size_t)capacity;
+    }
+    if (to_copy > 0) {
+        memcpy(out_entries, vec.data, to_copy * sizeof(DirEntry));
+    }
+    *count_io = (int)to_copy;
+
+    entry_vec_free(&vec);
+
+    /* The directory itself was enumerable, so a per-entry failure is not
+     * fatal: report FS_OK and let the individual rows carry their own
+     * status. Only an entirely empty result with a recorded error is
+     * surfaced as a failure. */
+    if (to_copy == 0 && first_err != FS_OK) {
+        return first_err;
     }
     return FS_OK;
 }

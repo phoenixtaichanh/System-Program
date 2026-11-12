@@ -22,11 +22,11 @@ bool fmt_size_human(unsigned long long bytes, char *out, size_t out_size);
  * Returns true on success. */
 bool fmt_time_local(time_t t, char *out, size_t out_size);
 
-/* Convert mode_t to symbolic form (e.g. "-rwxr-x---"). */
-bool fmt_perm_symbolic(mode_t mode, char *out, size_t out_size);
+/* Convert mode bits to symbolic form (e.g. "-rwxr-x---"). */
+bool fmt_perm_symbolic(unsigned int mode, char *out, size_t out_size);
 
-/* Convert mode_t to octal string (e.g. "0750"). */
-bool fmt_perm_octal(mode_t mode, char *out, size_t out_size);
+/* Convert mode bits to octal string (e.g. "0750"). */
+bool fmt_perm_octal(unsigned int mode, char *out, size_t out_size);
 
 /* Translate FSStatus + errno to a user-friendly message. */
 const char *fmt_status_message(FSStatus s, int errno_code);

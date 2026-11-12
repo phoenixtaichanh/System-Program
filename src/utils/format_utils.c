@@ -8,10 +8,11 @@
  *   - fmt_perm_octal   (e.g. "0750")
  *   - fmt_status_message
  *   - fmt_type_label
+ *
+ * All mode-bit tests go through the portable FS_S_IS* macros from
+ * fs_platform.h so the same code works on Linux and Windows.
  * ============================================================================
  */
-
-#define _XOPEN_SOURCE 700   /* expose S_IF* and S_ISVTX macros */
 
 #include "format_utils.h"
 
@@ -19,7 +20,6 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
-#include <sys/stat.h>
 
 /* ------------------------------------------------------------------ *
  * fmt_size_human
@@ -100,7 +100,7 @@ fmt_time_local(time_t t, char *out, size_t out_size)
  *   Produce a 10-character string like "-rwxr-x---".
  * ------------------------------------------------------------------ */
 bool
-fmt_perm_symbolic(mode_t mode, char *out, size_t out_size)
+fmt_perm_symbolic(unsigned int mode, char *out, size_t out_size)
 {
     if (out == NULL || out_size < 11) {
         return false;
@@ -108,13 +108,13 @@ fmt_perm_symbolic(mode_t mode, char *out, size_t out_size)
 
     /* File type character. */
     char t;
-    if      (S_ISREG(mode))     t = '-';
-    else if (S_ISDIR(mode))     t = 'd';
-    else if (S_ISLNK(mode))     t = 'l';
-    else if (S_ISCHR(mode))     t = 'c';
-    else if (S_ISBLK(mode))     t = 'b';
-    else if (S_ISFIFO(mode))    t = 'p';
-    else if (S_ISSOCK(mode))    t = 's';
+    if      (FS_S_ISREG(mode))  t = '-';
+    else if (FS_S_ISDIR(mode))  t = 'd';
+    else if (FS_S_ISLNK(mode))  t = 'l';
+    else if (FS_S_ISCHR(mode))  t = 'c';
+    else if (FS_S_ISBLK(mode))  t = 'b';
+    else if (FS_S_ISFIFO(mode)) t = 'p';
+    else if (FS_S_ISSOCK(mode)) t = 's';
     else                        t = '?';
 
     /* Permission triplets: rwx for user, group, other. */
@@ -126,9 +126,10 @@ fmt_perm_symbolic(mode_t mode, char *out, size_t out_size)
         }
     }
     /* Set-uid / set-gid / sticky. */
-    if (mode & S_ISUID) p[2] = (p[2] == 'x') ? 's' : 'S';
-    if (mode & S_ISGID) p[5] = (p[5] == 'x') ? 's' : 'S';
-    if (mode & 01000)   p[8] = (p[8] == 'x') ? 't' : 'T';
+    if (mode & FS_S_ISUID) p[2] = (p[2] == 'x') ? 's' : 'S';
+    if (mode & FS_S_ISGID) p[5] = (p[5] == 'x') ? 's' : 'S';
+    if (mode & FS_S_ISVTX) p[8] = (p[8] == 'x') ? 't' : 'T';
+    p[9] = '\0';   /* terminate before the string is used with "%s" */
 
     snprintf(out, out_size, "%c%s", t, p);
     return true;
@@ -139,12 +140,12 @@ fmt_perm_symbolic(mode_t mode, char *out, size_t out_size)
  *   Produce a 4-digit octal string like "0750" (always 4 digits).
  * ------------------------------------------------------------------ */
 bool
-fmt_perm_octal(mode_t mode, char *out, size_t out_size)
+fmt_perm_octal(unsigned int mode, char *out, size_t out_size)
 {
     if (out == NULL || out_size < 5) {
         return false;
     }
-    snprintf(out, out_size, "%04o", (unsigned int)(mode & 07777));
+    snprintf(out, out_size, "%04o", mode & 07777u);
     return true;
 }
 

@@ -10,6 +10,7 @@
 #include "fs_types.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 
 /* Returns true if `path` is an absolute path (starts with '/'). */
 bool path_is_absolute(const char *path);

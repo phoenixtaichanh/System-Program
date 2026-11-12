@@ -9,9 +9,8 @@
  * ============================================================================
  */
 
-#define _XOPEN_SOURCE 700
-
 #include "fs_navigation.h"
+#include "fs_stat_util.h"
 
 #include <errno.h>
 #include <stdlib.h>
@@ -53,16 +52,24 @@ fs_set_cwd(const char *path)
     if (path == NULL) return FS_ERR_INVALID_PATH;
     if (path[0] == '\0') return FS_ERR_INVALID_PATH;
 
+    /* Check the path type first. chdir() reports "not a directory" with
+     * ENOTDIR on POSIX, but the Windows C runtime reports ENOENT for a
+     * file instead, which would be misleading. */
+    FsRawStat st;
+    if (fs_plat_stat(path, &st) == 0 && !FS_S_ISDIR(st.mode)) {
+        return FS_ERR_NOT_DIR;
+    }
+
     if (chdir(path) == 0) return FS_OK;
 
     int e = errno;
     switch (e) {
-        case ENOENT:        return FS_ERR_NOT_FOUND;
-        case ENOTDIR:       return FS_ERR_NOT_DIR;
-        case EACCES:
-        case EPERM:         return FS_ERR_PERMISSION;
-        case ELOOP:
-        case ENAMETOOLONG:  return FS_ERR_INVALID_PATH;
-        default:            return FS_ERR_IO;
+    case ENOENT:        return FS_ERR_NOT_FOUND;
+    case ENOTDIR:       return FS_ERR_NOT_DIR;
+    case EACCES:
+    case EPERM:         return FS_ERR_PERMISSION;
+    case ELOOP:
+    case ENAMETOOLONG:  return FS_ERR_INVALID_PATH;
+    default:            return FS_ERR_IO;
     }
 }
